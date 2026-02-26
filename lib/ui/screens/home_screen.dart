@@ -4,9 +4,63 @@ import '../state/app_provider.dart';
 import 'event_form_screen.dart';
 import 'event_detail_screen.dart';
 import 'category_screen.dart';
+import '../../data/models/category.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  // [NEW] ฟังก์ชันโชว์ Filter Dialog
+  void _showFilterDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final provider = ctx.read<AppProvider>();
+        return AlertDialog(
+          title: const Text('ตัวกรองกิจกรรม'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: provider.filterDateRange,
+                decoration: const InputDecoration(labelText: 'ช่วงเวลา'),
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('ทั้งหมด')),
+                  DropdownMenuItem(value: 'today', child: Text('วันนี้')),
+                  DropdownMenuItem(value: 'month', child: Text('เดือนนี้')),
+                ],
+                onChanged: (val) => provider.setFilters(dateRange: val),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: provider.filterStatus ?? 'all',
+                decoration: const InputDecoration(labelText: 'สถานะ'),
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('ทุกสถานะ')),
+                  DropdownMenuItem(value: 'pending', child: Text('ยังไม่เริ่ม')),
+                  DropdownMenuItem(value: 'in_progress', child: Text('กำลังทำ')),
+                  DropdownMenuItem(value: 'completed', child: Text('เสร็จสิ้น')),
+                ],
+                onChanged: (val) => provider.setFilters(status: val),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                provider.clearFilters();
+                Navigator.pop(ctx);
+              },
+              child: const Text('ล้างตัวกรอง'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('ตกลง'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +74,13 @@ class HomeScreen extends StatelessWidget {
             icon: const Icon(Icons.search),
             onPressed: () => showSearch(context: context, delegate: EventSearchDelegate(provider)),
           ),
+          // [NEW] ปุ่ม Filter
+          IconButton(
+            icon: const Icon(Icons.filter_alt_outlined),
+            onPressed: () => _showFilterDialog(context),
+          ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.filter_list),
+            icon: const Icon(Icons.sort),
             onSelected: (value) {
               if (value == 'sort_closest') provider.setFilters(sort: 'closest');
               if (value == 'sort_latest') provider.setFilters(sort: 'latest');
@@ -36,7 +95,6 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      // --- เพิ่มเมนู Drawer ตรงนี้ ---
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -49,7 +107,7 @@ class HomeScreen extends StatelessWidget {
               leading: const Icon(Icons.category),
               title: const Text('จัดการประเภทกิจกรรม'),
               onTap: () {
-                Navigator.pop(context); // ปิด Drawer
+                Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoryScreen()));
               },
             ),
@@ -65,17 +123,27 @@ class HomeScreen extends StatelessWidget {
                   itemCount: provider.displayEvents.length,
                   itemBuilder: (context, index) {
                     final event = provider.displayEvents[index];
+                    // กรณีลบ Category ไปแล้ว ให้ fallback
                     final category = provider.categories.firstWhere(
-                      (c) => c.id == event.categoryId,
-                      orElse: () => provider.categories.first,
-                    );
-                    Color catColor = Color(int.parse(category.colorHex.replaceFirst('#', '0xFF')));
+  (c) => c.id == event.categoryId,
+  orElse: () => EventCategory( // ตรวจสอบว่ามี () => นำหน้า
+    name: 'Unknown', 
+    colorHex: '#999999', 
+    iconKey: 'error',
+  ),
+);
+                    
+                    Color catColor;
+                    try {
+                      catColor = Color(int.parse(category.colorHex.replaceFirst('#', '0xFF')));
+                    } catch (e) {
+                      catColor = Colors.grey;
+                    }
 
                     return Card(
                       elevation: 2,
                       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                       child: InkWell(
-                        // --- เพิ่ม Navigator ไปหน้ารายละเอียด ---
                         onTap: () {
                           Navigator.push(
                             context,
@@ -123,7 +191,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // (ฟังก์ชัน _buildStatusChip และ EventSearchDelegate ใช้ตัวเดิมจาก Part 3 ได้เลยครับ)
   Widget _buildStatusChip(String status) {
     Color color;
     String text;
@@ -144,25 +211,12 @@ class HomeScreen extends StatelessWidget {
 class EventSearchDelegate extends SearchDelegate {
   final AppProvider provider;
   EventSearchDelegate(this.provider);
-
   @override
   List<Widget>? buildActions(BuildContext context) => [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
-
   @override
-  Widget? buildLeading(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.arrow_back),
-      onPressed: () { provider.setSearchQuery(''); close(context, null); },
-    );
-  }
-
+  Widget? buildLeading(BuildContext context) => IconButton(icon: const Icon(Icons.arrow_back), onPressed: () { provider.setSearchQuery(''); close(context, null); });
   @override
-  Widget buildResults(BuildContext context) {
-    provider.setSearchQuery(query);
-    WidgetsBinding.instance.addPostFrameCallback((_) => close(context, null));
-    return const SizedBox();
-  }
-
+  Widget buildResults(BuildContext context) { provider.setSearchQuery(query); WidgetsBinding.instance.addPostFrameCallback((_) => close(context, null)); return const SizedBox(); }
   @override
   Widget buildSuggestions(BuildContext context) => const SizedBox();
 }

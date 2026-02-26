@@ -4,7 +4,12 @@ class EventCategory {
   final String colorHex;
   final String iconKey;
 
-  EventCategory({this.id, required this.name, required this.colorHex, required this.iconKey});
+  EventCategory({
+    this.id, // id ไม่ควรมี required เพราะตอนสร้าง fallback เราไม่ได้ใส่ id
+    required this.name,
+    required this.colorHex,
+    required this.iconKey,
+  });
 
   Map<String, dynamic> toMap() {
     return {
